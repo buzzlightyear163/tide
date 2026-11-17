@@ -737,12 +737,12 @@ document.fonts.ready.then(() => { $("#storyCv").width = 0; storyScroll(); }); st
 const API = "https://api.dexscreener.com", GT = "https://api.geckoterminal.com/api/v2";
 const RULES = { max: 20, live: 5, thin: 3, minLiq: 8000, minCurveMc: 15000, minVol: 5000, minTx: 50, minAge: 864e5, clipLo: .5, clipHi: 1.5, refresh: 45000 };
 const DEFAULTS = [
-  { id: "ai", gt: ["ai", "agent"], kw: ["ai", "agent", "gpt", "agi", "neural", "llm", "claude", "grok", "robot", "bot"] },
-  { id: "gta6", gt: ["gta", "vice"], kw: ["gta", "vice", "leonida", "rockstar", "wasted", "bawsaq"] },
-  { id: "cats", gt: ["cat", "kitty"], kw: ["cat", "kitty", "kitten", "meow", "popcat", "mew"] },
+  { id: "ai", gt: ["ai"], kw: ["ai", "agent", "gpt", "agi", "neural", "llm", "claude", "grok", "robot", "bot"] },
+  { id: "gta6", gt: ["gta"], kw: ["gta", "vice", "leonida", "rockstar", "wasted", "bawsaq"] },
+  { id: "cats", gt: ["cat"], kw: ["cat", "kitty", "kitten", "meow", "popcat", "mew"] },
   { id: "dogs", gt: ["dog", "inu"], kw: ["dog", "doge", "inu", "shib", "pup", "puppy", "wif", "bonk"] },
   { id: "frogs", gt: ["pepe", "frog"], kw: ["pepe", "frog", "toad", "ribbit", "kek"] },
-  { id: "politics", gt: ["trump", "elon"], kw: ["trump", "maga", "elon", "president", "war", "usa", "vote"] },
+  { id: "politics", gt: ["trump"], kw: ["trump", "maga", "elon", "president", "war", "usa", "vote"] },
 ];
 const BLOCK_SYM = new Set(["SOL", "WSOL", "USDC", "USDT", "USDG", "PYUSD", "USDS", "JUP", "JITOSOL", "MSOL", "BSOL", "WBTC", "WETH", "ETH", "BTC"]);
 const BLOCK_NAME = /wormhole|\(portal\)|\(bitcoin\)|bridged|wrapped|securities|xstock/i;
@@ -760,11 +760,14 @@ async function getJSON(url, ms = 9000) {
   const ac = new AbortController(), t = setTimeout(() => ac.abort(), ms);
   try { const r = await fetch(url, { signal: ac.signal }); if (!r.ok) throw new Error(r.status); return await r.json(); } finally { clearTimeout(t); }
 }
-// GeckoTerminal is free but strict: one request every 2.5s, in a queue
+// GeckoTerminal is free but strict: one request every 3s in a queue; when it says slow down, wait 15s and try once more
 const gtQ = []; let gtBusy = false;
-function gt(path) { return new Promise((res, rej) => { gtQ.push({ path, res, rej }); pumpGT(); }); }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function gt(path) { return new Promise((res, rej) => { gtQ.push({ path, res, rej, tries: 0 }); pumpGT(); }); }
 async function pumpGT() { if (gtBusy) return; gtBusy = true;
-  while (gtQ.length) { const j = gtQ.shift(); try { j.res(await getJSON(GT + j.path)); } catch (e) { j.rej(e); } await new Promise(r => setTimeout(r, 2500)); }
+  while (gtQ.length) { const j = gtQ.shift();
+    try { j.res(await getJSON(GT + j.path)); await sleep(3000); }
+    catch (e) { if (j.tries++ < 1) { gtQ.unshift(j); await sleep(15000); } else { j.rej(e); await sleep(3000); } } }
   gtBusy = false; }
 // both sources become one shape
 const fromDS = p => p.chainId !== "solana" ? null : { mint: p.baseToken?.address, sym: p.baseToken?.symbol, name: p.baseToken?.name, price: +p.priceUsd,
