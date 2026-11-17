@@ -1033,9 +1033,11 @@ function startPreviewRadar() { if (radarFake || gotLive) return; setRadar(false)
   radarFake = setInterval(() => { const w = words[Math.floor(Math.random() * words.length)]; launch({ name: w + " " + ["coin", "world", "club", "inu", "fi"][Math.floor(Math.random() * 5)], symbol: w.replace(/\s/g, "").toUpperCase().slice(0, 6) }, true); }, reduce ? 4000 : 1600); }
 (function connect(tries = 0) {
   let ws; try { ws = new WebSocket("wss://pumpportal.fun/api/data"); } catch { return startPreviewRadar(); }
-  ws.onopen = () => ws.send(JSON.stringify({ method: "subscribeNewToken" }));
+  ws.onopen = () => { ws.send(JSON.stringify({ method: "subscribeNewToken" }));
+    if (!gotLive) { gotLive = true; if (radarFake) { clearInterval(radarFake); radarFake = null; $("#log").innerHTML = ""; Object.assign(RAD, { a: 0, b: 0, per: {} });
+      tides.forEach(t => t.launches = 0); ["#sA", "#sB"].forEach(x => $(x).textContent = 0); $("#sC").textContent = "–"; $("#feature").className = "feature wait"; $("#feature").textContent = "waiting for the first launch that joins a tide…"; renderList(); }
+      setRadar(true); } };
   ws.onmessage = m => { let d; try { d = JSON.parse(m.data); } catch { return; } if (d.txType !== "create" || !d.mint) return;
-    if (!gotLive) { gotLive = true; if (radarFake) { clearInterval(radarFake); radarFake = null; $("#log").innerHTML = ""; Object.assign(RAD, { a: 0, b: 0, per: {} }); tides.forEach(t => t.launches = 0); } setRadar(true); }
     launch({ name: d.name, symbol: d.symbol, mint: d.mint }, false); };
   ws.onerror = () => {};
   ws.onclose = () => { if (tries < 6) setTimeout(() => connect(tries + 1), 3000 * (tries + 1)); else startPreviewRadar(); };
