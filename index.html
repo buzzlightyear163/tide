@@ -511,6 +511,18 @@ const TK = (() => {
     };
   }
 
+  // fill a screen region with a rising pixel tide (glow line, darker water under it)
+  function tideFill(g, sx, sy, sw, sh, base, amp) {
+    let prev = null;
+    for (let i = 0; i < sw; i++) {
+      const y = Math.round(base - i * (2.8 / sw) + amp * Math.sin(i * .5 + .9));
+      for (let yy = y + 1; yy < sy + sh; yy++) g.set(sx + i, yy, "glare");
+      g.set(sx + i, y, "glow");
+      if (prev !== null && Math.abs(prev - y) > 1) for (let yy = Math.min(prev, y) + 1; yy < Math.max(prev, y); yy++) g.set(sx + i - (prev > y ? 0 : 1), yy, "glow");
+      prev = y;
+    }
+  }
+
   // ---------- Objects. Each returns a Grid of palette keys. Build inside a 1-cell margin, then outline. ----------
   const OBJECTS = {
     computer({ ticker = "" } = {}) {
@@ -572,6 +584,65 @@ const TK = (() => {
         prev = y;
       }
       [[sx, sy], [sx + sw - 1, sy], [sx, sy + sh - 1], [sx + sw - 1, sy + sh - 1]].forEach(([x, y]) => g.set(x, y, "shade"));
+      return g;
+    },
+    // PFP options without the computer.
+    // A: the screen alone as a square tile: ticker over the rising tide.
+    screen({ ticker = "" } = {}) {
+      const t = ticker.replace(/^\$/, "").toUpperCase(), k = 2, tw = textWidth(t, k);
+      const sw = Math.max(30, tw + 8), sh = sw - 6, b = 4, W = sw + b * 2 + 2, H = sh + b * 2 + 2, g = Grid(W, H), x0 = 1, y0 = 1;
+      g.rect(x0, y0, sw + b * 2, sh + b * 2, "body"); [[x0, y0], [x0 + sw + b * 2 - 1, y0], [x0, y0 + sh + b * 2 - 1], [x0 + sw + b * 2 - 1, y0 + sh + b * 2 - 1]].forEach(([x, y]) => g.set(x, y, null));
+      g.rect(x0 + 1, y0 + 1, sw + b * 2 - 2, 1, "hi"); g.rect(x0 + 1, y0 + 1, 1, sh + b * 2 - 2, "hi");
+      g.rect(x0 + sw + b * 2 - 2, y0 + 1, 1, sh + b * 2 - 2, "shade"); g.rect(x0 + 1, y0 + sh + b * 2 - 2, sw + b * 2 - 2, 1, "shade");
+      const sx = x0 + b, sy = y0 + b;
+      g.rect(sx - 1, sy - 1, sw + 2, sh + 2, "shade"); g.rect(sx - 1, sy - 1, sw + 2, 1, "dark"); g.rect(sx - 1, sy - 1, 1, sh + 2, "dark");
+      g.rect(sx, sy, sw, sh, "screen");
+      g.text(t, sx + Math.floor((sw - tw) / 2), sy + 4, "glow", k);
+      tideFill(g, sx, sy, sw, sh, sy + sh - 8, 1.6);
+      [[sx, sy], [sx + sw - 1, sy], [sx, sy + sh - 1], [sx + sw - 1, sy + sh - 1]].forEach(([x, y]) => g.set(x, y, "shade"));
+      g.outline(); return g;
+    },
+    // B: the same tile, no text: three rising waves, one symbol.
+    waves() {
+      const sw = 30, sh = 30, b = 4, W = sw + b * 2 + 2, H = sh + b * 2 + 2, g = Grid(W, H), x0 = 1, y0 = 1;
+      g.rect(x0, y0, sw + b * 2, sh + b * 2, "body"); [[x0, y0], [x0 + sw + b * 2 - 1, y0], [x0, y0 + sh + b * 2 - 1], [x0 + sw + b * 2 - 1, y0 + sh + b * 2 - 1]].forEach(([x, y]) => g.set(x, y, null));
+      g.rect(x0 + 1, y0 + 1, sw + b * 2 - 2, 1, "hi"); g.rect(x0 + 1, y0 + 1, 1, sh + b * 2 - 2, "hi");
+      g.rect(x0 + sw + b * 2 - 2, y0 + 1, 1, sh + b * 2 - 2, "shade"); g.rect(x0 + 1, y0 + sh + b * 2 - 2, sw + b * 2 - 2, 1, "shade");
+      const sx = x0 + b, sy = y0 + b;
+      g.rect(sx - 1, sy - 1, sw + 2, sh + 2, "shade"); g.rect(sx - 1, sy - 1, sw + 2, 1, "dark"); g.rect(sx - 1, sy - 1, 1, sh + 2, "dark");
+      g.rect(sx, sy, sw, sh, "screen");
+      // three waves, each higher than the last: the tide coming in. bands alternate dark and light under each line
+      [[sy + 23, "glare", .2], [sy + 17, "screen", 1.4], [sy + 11, "glare", 2.6]].reverse().forEach(([base, fill, ph]) => {
+        let prev = null;
+        for (let x = 0; x < sw; x++) { const y = Math.round(base - x * (5 / sw) + 1.5 * Math.sin(x * .42 + ph));
+          for (let yy = y + 1; yy < sy + sh; yy++) g.set(sx + x, yy, fill);
+          g.set(sx + x, y, "glow");
+          if (prev !== null && Math.abs(prev - y) > 1) for (let yy = Math.min(prev, y) + 1; yy < Math.max(prev, y); yy++) g.set(sx + x - (prev > y ? 0 : 1), yy, "glow");
+          prev = y; }
+      });
+      [[sx, sy], [sx + sw - 1, sy], [sx, sy + sh - 1], [sx + sw - 1, sy + sh - 1]].forEach(([x, y]) => g.set(x, y, "shade"));
+      g.outline(); return g;
+    },
+    // C: no tile: one dark pixel wave curling over, green crest, on the paper.
+    crest() {
+      const W = 36, H = 30, g = Grid(W, H), floor = H - 2, cx = 22, cy = 11, R = 9.5;
+      const spiral = new Set();
+      for (let t = 0; t <= 1; t += .002) {
+        const th = Math.PI + t * 2.15 * Math.PI, r = R * (1 - .62 * t), w = 2.6 * (1 - .55 * t) + .6;
+        const px = cx + r * Math.cos(th), py = cy + r * Math.sin(th);
+        for (let y = Math.floor(py - w); y <= py + w; y++) for (let x = Math.floor(px - w); x <= px + w; x++)
+          if ((x - px) ** 2 + (y - py) ** 2 <= w * w && x > 0 && x < W - 1 && y > 0 && y < H - 1) spiral.add(x + "," + y);
+      }
+      spiral.forEach(k => { const [x, y] = k.split(",").map(Number); g.set(x, y, "screen"); });
+      for (let x = 1; x < W - 1; x++) {               // the wave face under the curl, and the slope that leads into it
+        let low = -1; for (let y = 0; y < H; y++) if (spiral.has(x + "," + y) && y >= cy) low = y;
+        const slope = x < cx - R + 1 ? Math.round(floor - 3 - (x - 1) * ((floor - 3 - cy) / (cx - R))) : -1;
+        const from = low >= 0 ? low + 1 : slope >= 0 ? slope : -1;
+        if (from >= 0) for (let y = from; y < floor; y++) if (!g.get(x, y)) g.set(x, y, "screen");
+      }
+      for (let y = 1; y < floor; y++) for (let x = 1; x < W - 1; x++) if (g.get(x, y) === "screen" && y > cy + 4 && (y - floor) % 4 === 0 && (x + y) % 6 < 3) g.set(x, y, "glare");
+      for (let x = 1; x < W - 1; x++) { for (let y = 0; y < H; y++) if (g.get(x, y)) { g.set(x, y, "glow"); break; } }   // crest line on top
+      g.outline();
       return g;
     },
     // Banner art: a basket of 20 coins as pixel columns. The tide line rides the tops; one boat sank (red).
@@ -656,7 +727,7 @@ const TK = (() => {
 if (typeof module !== "undefined") module.exports = TK;
 </script>
 <script>
-const CONFIG = { ca: "", x: "https://x.com/", site: "", ticker: "$TIDE", object: "tide", theme: document.documentElement.dataset.theme };
+const CONFIG = { ca: "", x: "https://x.com/", site: "", ticker: "$TIDE", object: "screen", theme: document.documentElement.dataset.theme };
 const T = TK.THEMES[CONFIG.theme], reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
